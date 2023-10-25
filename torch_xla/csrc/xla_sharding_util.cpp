@@ -613,11 +613,10 @@ std::vector<at::Tensor> ShardingUtil::ShardTensor(
 }
 
 std::vector<XLATensor::ShardingSpecPtr> ShardingUtil::GetOutputSharding(
-    std::vector<xla::Shape>* output_shapes,
-    runtime::ComputationClient::ComputationPtr computation,
-    const torch::lazy::BackendDevice& device) {
+    const std::vector<xla::Shape>& output_shapes,
+    runtime::ComputationClient::ComputationPtr computation) {
   const auto& computation_proto = computation->computation().proto();
-  uint64_t num_outputs = output_shapes->size();
+  size_t num_outputs = output_shapes.size();
   std::vector<xla::OpSharding> output_shardings;
   std::vector<XLATensor::ShardingSpecPtr> sharding_specs(num_outputs);
   if (computation_proto.has_spmd_output_sharding()) {
@@ -644,16 +643,14 @@ std::vector<XLATensor::ShardingSpecPtr> ShardingUtil::GetOutputSharding(
       // Tensor sharding annotation type is non-zero (sharded).
       sharding_specs[i] = std::make_shared<XLATensor::ShardingSpec>(
           output_shardings[i],
-          MakeShapeWithDeviceLayout((*output_shapes)[i],
-                                    static_cast<XlaDeviceType>(device.type())));
+          MakeShapeWithDeviceLayout(output_shapes[i], XlaDeviceType::SPMD));
     } else {
       // Clear sharding if the output parameter is no longer sharded, this
       // assumes that the output is implicitly replicated and wrapped inside
       // PjRtShardedData.
       sharding_specs[i] = std::make_shared<XLATensor::ShardingSpec>(
           xla::HloSharding::Replicate().ToProto(),
-          MakeShapeWithDeviceLayout((*output_shapes)[i],
-                                    static_cast<XlaDeviceType>(device.type())));
+          MakeShapeWithDeviceLayout(output_shapes[i], XlaDeviceType::SPMD));
     }
   }
   return sharding_specs;
@@ -687,37 +684,20 @@ void ShardingUtil::PrepareOutputShardingPropagation(
   data_placeholders->resize(indices.size());
   sharding_specs->resize(indices.size());
 
-  const auto& computation_proto = computation->computation().proto();
-
-  std::vector<xla::OpSharding> output_shardings;
-  if (computation_proto.has_spmd_output_sharding()) {
-    if (computation_proto.spmd_output_sharding().tuple_shardings().size() > 0) {
-      auto tuple_shardings =
-          computation_proto.spmd_output_sharding().tuple_shardings();
-      output_shardings = std::vector<xla::OpSharding>(tuple_shardings.begin(),
-                                                      tuple_shardings.end());
-    } else {
-      output_shardings = std::vector<xla::OpSharding>{
-          computation_proto.spmd_output_sharding()};
-    }
+  std::vector<xla::Shape> output_shapes;
+  output_shapes.reserve(indices.size());
+  for (int i = 0; i < indices.size(); ++i) {
+    auto xtensor = (*tensors)[indices[i]];
+    output_shapes.push_back(xtensor->shape().get());
   }
-
-  // Output parameter sharding annotations, defaults to REPLICATED(0) if unset.
-  if (output_shardings.empty()) {
-    // Initializes with default sharding type, REPLCIATED.
-    output_shardings.resize(indices.size());
-  }
-  XLA_CHECK(indices.size() == output_shardings.size())
+  auto new_sharding_specs = GetOutputSharding(output_shapes, computation);
+  XLA_CHECK(indices.size() == new_sharding_specs.size())
       << "Expected size: " << indices.size()
-      << ", actual size: " << output_shardings.size();
+      << ", actual size: " << new_sharding_specs.size();
 
   for (int i = 0; i < indices.size(); ++i) {
     auto xtensor = (*tensors)[indices[i]];
-    (*sharding_specs)[i] = std::make_shared<XLATensor::ShardingSpec>(
-        output_shardings[i],
-        MakeShapeWithDeviceLayout(
-            xtensor->shape().get(),
-            static_cast<XlaDeviceType>(xtensor->GetDevice().type())));
+    (*sharding_specs)[i] = new_sharding_specs[i];
     xtensor->SetShardingSpec(*(*sharding_specs)[i]);
 
     // Create sharded data placeholder, this will be used to
