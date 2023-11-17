@@ -473,8 +473,9 @@ torch::lazy::BackendDataPtr TensorToXlaData(
         runtime::GetComputationClient()->GetLocalDevices();
     auto replicated_data =
         std::vector<at::Tensor>(local_devices.size(), tensor);
+    // Implicit replication is marked with xla::OpSharding::UNKNOWN.
     auto sharding_spec = std::make_shared<XLATensor::ShardingSpec>(
-        xla::HloSharding::Replicate().ToProto(), shape);
+        xla::HloSharding::Unknown().ToProto(), shape);
     return ShardingUtil::CreateShardedData(replicated_data, local_devices,
                                            sharding_spec);
   }
@@ -695,8 +696,9 @@ std::vector<torch::lazy::BackendDataPtr> CreateTensorsData(
       auto shape = CreateComputationShapeFromTensor(tensors[i], &device);
       auto replicated_data =
           std::vector<at::Tensor>(local_devices.size(), tensors[i]);
+      // Implicit replication is marked with xla::OpSharding::UNKNOWN.
       auto sharding_spec = std::make_shared<XLATensor::ShardingSpec>(
-          xla::HloSharding::Replicate().ToProto(), shape);
+          xla::HloSharding::Unknown().ToProto(), shape);
       handles.push_back(ShardingUtil::CreateShardedData(
           replicated_data, local_devices, sharding_spec));
     }

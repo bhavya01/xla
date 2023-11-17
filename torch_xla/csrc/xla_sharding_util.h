@@ -24,7 +24,8 @@ class ShardingUtil {
     TUPLE = 2,
     TILED = 3,
     MANUAL = 4,
-    PARTIAL = 5
+    PARTIAL = 5,
+    UNKNOWN = 6  // implicit replication
   };
 
   // Determine the ShardingType of the given xla::OpSharding.
@@ -153,6 +154,9 @@ class ShardingUtil {
       const std::vector<std::string>& devices,
       const XLATensor::ShardingSpecPtr& sharding_spec);
 
+  static void XlaMarkSharding(const at::Tensor& input,
+                              xla::OpSharding sharding);
+
   //////////////////////////// Auto-Sharding ////////////////////////////
 
   // Construct a device mesh for auto-sharding pass. Returns a tuple of mesh
@@ -166,16 +170,13 @@ class ShardingUtil {
   // armotized over multiple steps, though, since the input sharding is
   // propagated to the output for the subsequent runs. Sharded data transfer
   // during resharding should be asynchronous. It is recommended to keep the
-  // input sharding on the input data as-is. Return true if resharded any of
-  // the parameters.
-  static bool ReshardParameters(
+  // input sharding on the input data as-is.
+  static void ReshardParameters(
       const xla::HloModuleProto& module,
       std::vector<torch::lazy::BackendDataPtr>* parameters);
 
   //////////////////////////// Dynamo Integration ////////////////////////////
 
-  static void XlaMarkSharding(const at::Tensor& input,
-                              xla::OpSharding sharding);
   static void XlaMarkShardingDynamoCustomOp(
       const at::Tensor& input, c10::List<at::IntArrayRef> tile_assignment,
       c10::List<at::IntArrayRef> group_assignment,

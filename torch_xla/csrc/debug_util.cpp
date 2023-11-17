@@ -195,7 +195,8 @@ void DebugUtil::SaveOutputShardingInfo(std::vector<XLATensorPtr>* tensors,
       ss << xla::HloSharding::FromProto(xtensor->sharding_spec()->sharding)
                 ->ToString();
     } else {
-      ss << xla::HloSharding::FromProto(xla::HloSharding::Replicate().ToProto())
+      // Implicit replication is marked with xla::OpSharding::UNKNOWN.
+      ss << xla::HloSharding::FromProto(xla::HloSharding::Unknown().ToProto())
                 ->ToString();
     }
     ss << "\n";
