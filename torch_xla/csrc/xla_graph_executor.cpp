@@ -1212,7 +1212,8 @@ XLAGraphExecutor::CompilationResult XLAGraphExecutor::Compile(
   }
   // Always execute sharded when running in SPMD mode
   bool is_sharded = (coll.device == GetVirtualDevice());
-  // Annotate HLO sharding selectively in the compuation.
+  TF_VLOG(3) << "SPMD mode " << (is_sharded ? "enabled!" : "disabled.");
+  // Annotate HLO sharding selectively in the cßompuation.
   ShardingUtil::SetHloSharding(&lowering_ctx);
 
   std::vector<std::pair<int64_t, int64_t>> input_output_alias_pair;
@@ -1276,6 +1277,7 @@ XLAGraphExecutor::CompilationResult XLAGraphExecutor::Compile(
                        /*parameter_is_tupled_arguments=*/should_wrap_parameter,
                        /*is_sharded=*/is_sharded});
   if (use_autosharding) {
+    TF_CHECK(is_sharded) << "Auto-sharding pass requires SPMD mode.";
     instances.front().use_auto_spmd_partitioning = use_autosharding;
     TF_VLOG(5) << "use_auto_spmd_partitioning=" << use_autosharding;
     auto mesh_shape_ids = ShardingUtil::GetAutoShardingMesh();
