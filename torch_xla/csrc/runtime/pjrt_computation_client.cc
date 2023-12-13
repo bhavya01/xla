@@ -203,14 +203,14 @@ PjRtComputationClient::PjRtComputationClient() {
         };
       }
     } else {
-      int num_dev_per_host = sys_util::GetEnvInt(env::kEnvNumGpu, -1);
-      XLA_CHECK(num_dev_per_host >= 1) << "GPU_NUM_DEVICE=" << num_dev_per_host;
-      std::set<int> allowed_devices_id = {};
-      for (int i=0; i < num_dev_per_host; i++) {
-        allowed_devices_id.insert(allowed_devices_id.end(), i + global_process_rank*num_dev_per_host);
-      }
-      TF_VLOG(3) << "allowed_devices_id=" << allowed_devices_id;
-      allowed_devices = std::make_optional<std::set<int>>(allowed_devices_id);
+      // int num_dev_per_host = sys_util::GetEnvInt(env::kEnvNumGpu, -1);
+      // XLA_CHECK(num_dev_per_host >= 1) << "GPU_NUM_DEVICE=" << num_dev_per_host;
+      // std::set<int> allowed_devices_id = {};
+      // for (int i=0; i < num_dev_per_host; i++) {
+      //   allowed_devices_id.insert(allowed_devices_id.end(), i + global_process_rank*num_dev_per_host);
+      // }
+      // TF_VLOG(3) << "allowed_devices_id=" << allowed_devices_id;
+      // allowed_devices = std::make_optional<std::set<int>>(allowed_devices_id);
 
       if (global_world_size > 1) {
         // Use the XlaCoordinator as the distributed key-value store.
