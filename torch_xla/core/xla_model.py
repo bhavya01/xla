@@ -81,7 +81,7 @@ def get_xla_supported_devices(devkind=None, max_devices=None):
   """Returns a list of supported devices of a given kind.
 
   Args:
-    devkind (string..., optional): If specified, one of `TPU`, `GPU`, `XPU`, 
+    devkind (string..., optional): If specified, one of `TPU`, `GPU`, `XPU`,
       `NEURON` or `CPU` (the 'GPU' XLA device is currently not implemented).
     max_devices (int, optional): The maximum number of devices to be returned of
       that kind.
@@ -191,7 +191,7 @@ def xla_device(n=None, devkind=None):
     n (int, optional): The specific instance (ordinal) to be returned. If
       specified, the specific XLA device instance will be returned. Otherwise
       the first device of `devkind` will be returned.
-    devkind (string..., optional): If specified, one of `TPU`, `CUDA`, `XPU` 
+    devkind (string..., optional): If specified, one of `TPU`, `CUDA`, `XPU`
       `NEURON`, `ROCM` or `CPU`.
 
   Returns:
@@ -227,7 +227,7 @@ def xla_device_hw(device):
       real device.
 
   Returns:
-    A string representation of the hardware type (`CPU`, `TPU`, `XPU`, `NEURON`, `GPU`, `CUDA`, `ROCM`) 
+    A string representation of the hardware type (`CPU`, `TPU`, `XPU`, `NEURON`, `GPU`, `CUDA`, `ROCM`)
     of the given device.
   """
   real_device = _xla_real_device(device)

@@ -327,7 +327,7 @@ class XLAGraphExecutor : public torch::lazy::LazyGraphExecutor {
       absl::Span<const size_t> indices, LoweringContext* lowering_ctx);
 
   // We don't use upstream Compile to have BuildInputOutputAliases.
-  CompilationResult Compile(const std::vector<XLATensorPtr>& tensors,
+  CompilationResult Compile(std::vector<XLATensorPtr>& tensors,
                             absl::Span<const std::string> devices,
                             const SyncTensorCollection& coll,
                             PostOrderData* po_data,

@@ -368,8 +368,9 @@ void XLAGraphExecutor::SyncLiveTensorsGraph(
   tsl::profiler::TraceMe activity("SyncLiveTensorsGraph",
                                   tsl::profiler::TraceMeLevel::kInfo);
   auto tensors = GetLiveTensors(device);
-  TF_VLOG(4) << tensors.size() << " live tensors: devices=("
-             << c10::Join(",", devices) << ")";
+  TF_VLOG(4) << tensors.size() << " live tensors: device=("
+             << device->toString() << "), devices=(" << c10::Join(",", devices)
+             << ")";
   SyncTensorsGraph(&tensors, devices, wait, /*sync_ltc_data=*/true);
 }
 
@@ -1076,7 +1077,7 @@ XLAGraphExecutor::LookupCachedCompile(const torch::lazy::hash_t& hash) {
     return nullptr;
   }
   TF_VLOG(5) << "Graph hash " << torch::lazy::HashToString(hash)
-             << " is computation hash "
+             << " is cached computation hash "
              << torch::lazy::HashToString(torch::lazy::Hash(
                     cached_computation->computation->computation()
                         .proto()
@@ -1096,6 +1097,16 @@ std::shared_ptr<XLAGraphExecutor::Async> XLAGraphExecutor::TryRunCachedSync(
   }
   TORCH_LAZY_VALUE_METRIC("TensorsGraphSize", po_data->post_order.size());
   TF_VLOG(5) << "TensorsGraphSize=" << po_data->post_order.size();
+
+  if (runtime::sys_util::GetEnvBool("XLA_AUTO_SPMD", false)) {
+    const xla::HloModuleProto& computation_proto =
+        cached_computation->computation->computation().proto();
+    ShardingUtil::ReshardParameters(computation_proto, tensors,
+                                    &po_data->parameters_data,
+                                    &po_data->post_order);
+    TF_VLOG(5) << "Parameter sequence hash after resharding: "
+               << torch::lazy::Hash(po_data->parameter_sequence);
+  }
 
   return ScheduleSyncTensorsGraph(
       tensors, coll, std::move(po_data->parameters_data),
@@ -1184,9 +1195,9 @@ XLAGraphExecutor::BuildInputOutputAliases(
 }
 
 XLAGraphExecutor::CompilationResult XLAGraphExecutor::Compile(
-    const std::vector<XLATensorPtr>& tensors,
-    absl::Span<const std::string> devices, const SyncTensorCollection& coll,
-    PostOrderData* po_data, const std::vector<torch::lazy::Value>& ir_values) {
+    std::vector<XLATensorPtr>& tensors, absl::Span<const std::string> devices,
+    const SyncTensorCollection& coll, PostOrderData* po_data,
+    const std::vector<torch::lazy::Value>& ir_values) {
   tsl::profiler::TraceMe activity(
       [&] {
         return tsl::profiler::TraceMeEncode(
@@ -1212,8 +1223,7 @@ XLAGraphExecutor::CompilationResult XLAGraphExecutor::Compile(
   }
   // Always execute sharded when running in SPMD mode
   bool is_sharded = (coll.device == GetVirtualDevice());
-  TF_VLOG(3) << "SPMD mode " << (is_sharded ? "enabled!" : "disabled.");
-  // Annotate HLO sharding selectively in the cßompuation.
+  // Annotate HLO sharding selectively in the compuation.
   ShardingUtil::SetHloSharding(&lowering_ctx);
 
   std::vector<std::pair<int64_t, int64_t>> input_output_alias_pair;
@@ -1292,8 +1302,9 @@ XLAGraphExecutor::CompilationResult XLAGraphExecutor::Compile(
   }
 
   TF_VLOG(3) << "Compiling IR graph hash "
-             << torch::lazy::HashToString(coll.hash) << " on device "
-             << coll.device << " ...";
+             << torch::lazy::HashToString(coll.hash)
+             << (is_sharded ? " with" : " without") << " SPMD"
+             << " on device " << coll.device << " ...";
   std::vector<std::shared_ptr<runtime::ComputationClient::Computation>>
       computations =
           runtime::GetComputationClient()->Compile(std::move(instances));
@@ -1304,7 +1315,7 @@ XLAGraphExecutor::CompilationResult XLAGraphExecutor::Compile(
              << computations.front()->program_shape().ToString() << std::endl;
   TF_VLOG(5)
       << "Graph hash " << torch::lazy::HashToString(coll.hash)
-      << " is computation hash "
+      << " is compiled computation hash "
       << torch::lazy::HashToString(torch::lazy::Hash(
              computations.front()->computation().proto().SerializeAsString()));
   if (should_wrap_parameter) {
@@ -1316,14 +1327,15 @@ XLAGraphExecutor::CompilationResult XLAGraphExecutor::Compile(
                  po_data->parameters_data.size());
   }
 
+  // TODO(yeounoh) move this to sync tensors scheduling.
   if (use_autosharding) {
     const xla::HloModuleProto& computation_proto =
         computations.front()->computation().proto();
-    // TODO(yeounoh) confirm if we need to re-trace for new po_data.
-    // TODO(yeounoh) verify that user sharding is respected by default.
-    ShardingUtil::ReshardParameters(computation_proto,
-                                    &po_data->parameters_data);
-    TF_VLOG(5) << ("Finished compilation with auto-sharding pass!");
+    ShardingUtil::ReshardParameters(computation_proto, &tensors,
+                                    &po_data->parameters_data,
+                                    &po_data->post_order);
+    TF_VLOG(5) << "Parameter sequence hash after resharding: "
+               << torch::lazy::Hash(po_data->parameter_sequence);
   }
 
   return {/*device=*/coll.device,
@@ -1368,7 +1380,7 @@ XLAGraphExecutor::SyncTensorsGraphInternal(
   PostOrderData po_data = RunPostOrder(ir_values, &coll);
   coll.hash = torch::lazy::HashCombine(
       coll.hash, torch::lazy::Hash(po_data.parameter_sequence));
-  TF_VLOG(4) << "Parameter sequence graph hash "
+  TF_VLOG(4) << "Parameter sequence & graph hash "
              << torch::lazy::HashToString(coll.hash);
   std::shared_ptr<Async> async =
       TryRunCachedSync(tensors, &coll, &po_data, tensor_data_vec);
@@ -1377,6 +1389,7 @@ XLAGraphExecutor::SyncTensorsGraphInternal(
   }
   CompilationResult compile_result =
       Compile(*tensors, devices, coll, &po_data, ir_values);
+
   TORCH_LAZY_VALUE_METRIC("TensorsGraphSize", compile_result.emitted_nodes);
   TF_VLOG(5) << "TensorsGraphSize=" << compile_result.emitted_nodes;
 
