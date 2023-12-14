@@ -166,6 +166,7 @@ PjRtComputationClient::PjRtComputationClient() {
     XLA_ERROR() << "TPU_LEGACY client is no longer available.";
   } else if (device_type == "GPU" || device_type == "CUDA" ||
              device_type == "ROCM") {
+    std::cout << "xw32, file=" << __FILE__ << ", line=" << __LINE__ << "function=" << __FUNCTION__ << ": Initializing PjRt GPU client..." << std::endl;
     TF_VLOG(1) << "Initializing PjRt GPU client...";
     bool async = sys_util::GetEnvBool(env::kEnvPjrtAsyncGpuClient, true);
     int local_process_rank = sys_util::GetEnvInt(env::kEnvPjRtLocalRank, 0);
@@ -827,7 +828,7 @@ PjRtComputationClient::ExecuteReplicated(
         "PjRtComputationClient::ExecuteReplicated_execute",
         tsl::profiler::TraceMeLevel::kInfo);
     results = pjrt_computation.executable
-                  ->Execute(std::move(argument_handles), execute_options,
+                  ->Execute(std::move(argument_handles), execute_options, // xw32: look at here.
                             returned_futures)
                   .value();
 
