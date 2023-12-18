@@ -45,6 +45,9 @@ class PjRtComputationClient : public ComputationClient {
   // spec.
   DataPtr ReshardData(const DataPtr& handle,
                       const xla::OpSharding& sharding) override;
+  std::vector<DataPtr> ReshardData(
+      absl::Span<const DataPtr> handles,
+      absl::Span<const xla::OpSharding> shardings) override;
 
   std::vector<xla::Literal> TransferFromServer(
       absl::Span<const DataPtr> handles) override;

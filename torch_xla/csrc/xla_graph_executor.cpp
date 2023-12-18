@@ -538,6 +538,12 @@ XLAGraphExecutor::SyncTensorCollection XLAGraphExecutor::CollectSyncTensors(
   coll.device = *unique_device;
   coll.indices.reserve(tensors.size());
   for (size_t i = 0; i < tensors.size(); ++i) {
+    // Sync sharding annotations between the tensor and its node, if exists.
+    // This either push down the sharding on the tensor to the IR before node
+    // hash computation if the node has no annotation, or it actually syncs the
+    // sharding attached to the node to the tensor, since sharding propagation &
+    // resharding should attach the latest to the node.
+    tensors[i]->sharding_spec();
     if (tensor_ids.insert(tensors[i]->GetUniqueId()).second &&
         // A tensor's xla_data might not be up to date if there is a view
         // associated with it. Make sure to sync those tensors here too.
@@ -550,15 +556,6 @@ XLAGraphExecutor::SyncTensorCollection XLAGraphExecutor::CollectSyncTensors(
           // Add only tensors which need to be synced.
           coll.hash = torch::lazy::HashCombine(coll.hash, ir_value.hash());
           coll.indices.push_back(i);
-
-          // `sharding_spec()` checks sharding equality. If IR node has no
-          // sharding, then sync XLATensor sharding to the IR node. XLATensor's
-          // sharding takes the precedence as the source of the truth.
-          XLATensor::ShardingSpecPtr sharding = tensors[i]->sharding_spec();
-          if (sharding) {
-            dynamic_cast<XlaNode*>(ir_value.node.get())
-                ->SetSharding(sharding->sharding, ir_value.index);
-          }
         }
       } else if (config.force_ltc_data) {
         // The tensor only has at::Tensor data. We need to queue it for a
@@ -1327,7 +1324,7 @@ XLAGraphExecutor::CompilationResult XLAGraphExecutor::Compile(
                  po_data->parameters_data.size());
   }
 
-  // TODO(yeounoh) move this to sync tensors scheduling.
+  // TODO(yeounoh) refactoring.
   if (use_autosharding) {
     const xla::HloModuleProto& computation_proto =
         computations.front()->computation().proto();
