@@ -101,8 +101,7 @@ InitializePjRt(const std::string& device_type) {
     XLA_CHECK(global_world_size>=0) << "global_world_size must be non-negative. LOCAL_WORLD_SIZE=" << local_world_size << ", WORLD_SIZE=" << global_world_size;
     std::optional<std::set<int>> allowed_devices;
     if (global_world_size > 1) {
-      allowed_devices =
-        std::make_optional<std::set<int>>(std::set{local_process_rank});
+      allowed_devices = std::set{local_process_rank};
       // Use the XlaCoordinator as the distributed key-value store.
       coordinator = std::make_unique<XlaCoordinator>(
           global_process_rank, global_world_size, master_addr, port);
