@@ -307,6 +307,7 @@ TEST_F(XLAShardingTest, CreateTensorsData) {
           torch_xla::runtime::env::kEnvPjRtDevice, "") == "") {
     GTEST_SKIP() << "`PJRT_DEVICE` is not set.";
   }
+  std::cout << "xw32, file=" << __FILE__ << ", line=" << __LINE__ << "function=" << __FUNCTION__ << ": XLA_USE_SPMD=" << torch_xla::runtime::sys_util::GetEnvString("XLA_USE_SPMD", "") << std::endl;
 
   std::vector<at::Tensor> tensors(2);
   auto tensor = at::ones({8, 8}, at::TensorOptions(at::kFloat));
@@ -333,6 +334,7 @@ TEST_F(XLAShardingTest, CreateTensorsData) {
                                                  shards[0]->shape()));
   EXPECT_TRUE(XlaDataValuesEqual(tensors_data[0], shards[0], at::kFloat));
 
+  std::cout << "xw32, file=" << __FILE__ << ", line=" << __LINE__ << "function=" << __FUNCTION__ << ": Returns multiple input shards, replicated" << std::endl;
   // Returns multiple input shards, replicated
   int64_t n_devices =
       torch_xla::runtime::GetComputationClient()->GetLocalDevices().size();
