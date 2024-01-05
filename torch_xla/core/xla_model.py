@@ -87,7 +87,7 @@ def get_xla_supported_devices(devkind=None, max_devices=None):
       that kind.
 
   Returns:
-    The list of device strings.
+    The list of device strings such as ['xla:0', 'xla:1', ...]
   """
   # TODO(xiowei replace gpu with cuda): Remove the below if statement after r2.2 release.
   if devkind and devkind.casefold() == 'gpu':
